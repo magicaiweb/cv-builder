@@ -131,9 +131,9 @@ export default function Home() {
           {/* Hero */}
           <section style={{ marginBottom: 56, maxWidth: 720 }}>
             <h2 style={{ fontSize: 52, lineHeight: 1.05, fontWeight: 400, letterSpacing: '-0.03em' }}>
-              A cover letter and a CV,<br/>
-              <em style={{ fontWeight: 300 }}>rewritten for the role</em> —<br/>
-              in about ten seconds.
+              Anyone looking for a job:<br/>
+              <em style={{ fontWeight: 300 }}>do it now</em> —<br/>
+              tailored for every role.
             </h2>
             <p style={{ fontSize: 17, lineHeight: 1.6, marginTop: 24, opacity: 0.75, maxWidth: 560 }}>
               Upload your CV, paste each job description, and download a customised cover letter and tailored CV as DOCX or PDF. Auto-detects English and Arabic.
