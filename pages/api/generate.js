@@ -1,75 +1,113 @@
 import Anthropic from '@anthropic-ai/sdk';
-import formidable from 'formidable';
-import fs from 'fs/promises';
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse';
 
-export const config = { api: { bodyParser: false } };
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
 
-function parseForm(req) {
-  const form = formidable({ maxFileSize: 12 * 1024 * 1024, multiples: false, keepExtensions: true });
-  return new Promise((resolve, reject) => {
-    form.parse(req, (err, fields, files) => err ? reject(err) : resolve({ fields, files }));
-  });
-}
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
-async function extractText(file) {
-  const filepath = file.filepath || file.path;
-  const original = (file.originalFilename || file.name || '').toLowerCase();
-  const mimetype = file.mimetype || file.type || '';
-  const buffer = await fs.readFile(filepath);
-  if (mimetype.includes('pdf') || original.endsWith('.pdf')) {
-    const parsed = await pdfParse(buffer);
-    return parsed.text || '';
+async function extractTextFromFile(base64, filename) {
+  const buffer = Buffer.from(base64, 'base64');
+  const lower = filename.toLowerCase();
+
+  if (lower.endsWith('.pdf')) {
+    const data = await pdfParse(buffer);
+    return data.text;
   }
-  if (mimetype.includes('word') || original.endsWith('.docx')) {
-    const parsed = await mammoth.extractRawText({ buffer });
-    return parsed.value || '';
+  if (lower.endsWith('.docx')) {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
   }
-  return buffer.toString('utf8');
-}
-
-function cleanJson(text) {
-  const trimmed = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
-  const first = trimmed.indexOf('{');
-  const last = trimmed.lastIndexOf('}');
-  return first >= 0 && last >= first ? trimmed.slice(first, last + 1) : trimmed;
+  if (lower.endsWith('.txt')) {
+    return buffer.toString('utf-8');
+  }
+  throw new Error('Unsupported file type. Please upload PDF, DOCX, or TXT.');
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured on the server.' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
-    const { fields, files } = await parseForm(req);
-    const uploaded = Array.isArray(files.cv) ? files.cv[0] : files.cv;
-    const jobDescription = Array.isArray(fields.jobDescription) ? fields.jobDescription[0] : fields.jobDescription;
-    if (!uploaded) return res.status(400).json({ error: 'CV file is required.' });
-    if (!jobDescription?.trim()) return res.status(400).json({ error: 'Job description is required.' });
+    const { cvFile, cvFilename, jobDescription, tone } = req.body;
 
-    const cvText = await extractText(uploaded);
-    if (!cvText.trim()) return res.status(400).json({ error: 'Could not extract text from this CV. Try DOCX or TXT.' });
+    if (!cvFile || !jobDescription) {
+      return res.status(400).json({ error: 'CV file and job description are required.' });
+    }
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const prompt = `You are an expert bilingual career writer. Detect whether the CV/job context is primarily English or Arabic. Return ONLY valid JSON with keys: language, coverLetter, cv, fitNotes.\n\nCV TEXT:\n${cvText.slice(0, 18000)}\n\nJOB DESCRIPTION:\n${jobDescription.slice(0, 12000)}\n\nRules:\n- Tailor the CV truthfully using only evidence from the CV.\n- Do not invent employers, degrees, dates, or certifications.\n- Improve wording, structure, keywords, and relevance to the job.\n- Cover letter should be concise, professional, and role-specific.\n- fitNotes must be 4-7 short bullets explaining match strengths and gaps.\n- If Arabic, write polished Modern Standard Arabic with correct RTL-friendly text.`;
+    // Extract text from uploaded CV
+    const cvText = await extractTextFromFile(cvFile, cvFilename);
 
-    const msg = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+    if (!cvText || cvText.trim().length < 50) {
+      return res.status(400).json({ error: 'Could not extract enough text from CV. Please try a different file.' });
+    }
+
+    const prompt = `You are an expert career writer. The user provides a job description and their current CV. Produce a tailored cover letter and a reformatted CV.
+
+Detect the dominant language of the job description (English or Arabic). Respond in that language. If Arabic, write everything naturally in Arabic.
+
+Tone for the cover letter: ${tone || 'professional'}.
+
+Return ONLY a valid JSON object — no preamble, no markdown fences, no commentary. Use exactly this shape:
+{
+  "language": "en" or "ar",
+  "candidate_name": "full name from the CV",
+  "candidate_contact": { "email": "...", "phone": "...", "location": "..." },
+  "cover_letter": "full cover letter, salutation through sign-off. Paragraphs separated by \\n\\n. Under 300 words. Use the candidate's actual name — never placeholders like [Your Name].",
+  "cv": {
+    "name": "candidate full name",
+    "contact": { "email": "...", "phone": "...", "location": "...", "linkedin": "..." },
+    "headline": "one-line professional headline tailored to this role",
+    "summary": "3-4 sentence summary tailored to the JD",
+    "experience": [
+      { "role": "title", "company": "company", "location": "city", "dates": "start - end", "bullets": ["achievement rewritten to mirror JD keywords", "..."] }
+    ],
+    "skills": ["skill1", "skill2"],
+    "education": [{ "degree": "...", "institution": "...", "location": "...", "dates": "..." }],
+    "languages": ["Language - level"]
+  },
+  "fit_notes": "2-3 sentences explaining the angle taken and what to emphasize in interviews"
+}
+
+Rules:
+- Rewrite experience bullets to mirror the JD's vocabulary and priorities, but never invent facts not in the CV.
+- Quantify achievements where possible using numbers already in the CV.
+- If a contact field is missing, use empty string.
+- If a section is missing in the CV, return an empty array.
+- Output must be valid parseable JSON.
+
+===== JOB DESCRIPTION =====
+${jobDescription}
+
+===== CV =====
+${cvText}`;
+
+    const response = await anthropic.messages.create({
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929',
       max_tokens: 4000,
-      temperature: 0.3,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const text = msg.content?.map(part => part.type === 'text' ? part.text : '').join('\n') || '';
-    const data = JSON.parse(cleanJson(text));
-    return res.status(200).json({
-      language: data.language || 'English',
-      coverLetter: data.coverLetter || data.cover_letter || '',
-      cv: data.cv || data.tailoredCv || data.tailored_cv || '',
-      fitNotes: Array.isArray(data.fitNotes) ? data.fitNotes : Array.isArray(data.fit_notes) ? data.fit_notes : [],
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error.message || 'Generation failed' });
+    const raw = response.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n');
+
+    const cleaned = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    return res.status(200).json(parsed);
+  } catch (err) {
+    console.error('Generation error:', err);
+    return res.status(500).json({ error: err.message || 'Generation failed.' });
   }
 }
