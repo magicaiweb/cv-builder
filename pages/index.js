@@ -65,20 +65,22 @@ export default function Home() {
   return <main className="page"><div className="wrap">
     <section className="hero">
       <div>
-        <span className="badge">⚡ AI CV Builder</span>
-        <h1>Tailored CVs and cover letters in minutes.</h1>
-        <p>Upload a CV, paste a job description, and generate a role-specific CV rewrite plus a polished cover letter. English and Arabic are auto-detected.</p>
+        <span className="badge">⚡ CV Builder for job seekers</span>
+        <h1>Anyone looking for a job: do it now.</h1>
+        <p>For anyone applying to jobs: upload your CV, paste each job description, and get a customised cover letter plus a tailored CV for that exact role. English and Arabic are auto-detected.</p>
         <div className="stats"><div className="stat"><strong>PDF</strong><span>CV upload</span></div><div className="stat"><strong>DOCX</strong><span>exports</span></div><div className="stat"><strong>AR/EN</strong><span>language aware</span></div></div>
       </div>
       <div className="panel">
-        <h2>Workflow</h2>
-        <p>1. Upload PDF, DOCX, or TXT CV<br/>2. Paste target job description<br/>3. Generate tailored documents<br/>4. Download DOCX or PDF</p>
+        <p className="micro">How it works</p>
+        <h2>One CV. Every job.</h2>
+        <p>Upload your CV once, paste a new job description for each application, then download a customised CV and cover letter.</p>
       </div>
     </section>
 
     <section className="grid">
       <form className="card" onSubmit={submit}>
-        <h2>Create documents</h2>
+        <p className="micro">Start here</p>
+        <h2>Create your application pack</h2>
         <div className="field"><label>CV file</label><div className="filebox"><input type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={(e)=>setFile(e.target.files?.[0] || null)} />{file && <small>Selected: {file.name}</small>}</div></div>
         <div className="field"><label>Job description</label><textarea placeholder="Paste the job description here..." value={jobDescription} onChange={(e)=>setJobDescription(e.target.value)} /></div>
         {error && <div className="error">{error}</div>}
