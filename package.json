@@ -1,0 +1,26 @@
+{
+  "name": "cv-builder",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
+    "docx": "^9.0.3",
+    "formidable": "^3.5.2",
+    "mammoth": "^1.8.0",
+    "next": "^16.2.6",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.15.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pdfkit": "^0.13.5",
+    "@types/react": "^18"
+  }
+}
