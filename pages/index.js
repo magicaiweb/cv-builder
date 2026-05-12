@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+const API_BASE = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 export default function Home() {
   const [file, setFile] = useState(null);
   const [jobDescription, setJobDescription] = useState('');
@@ -26,7 +28,7 @@ export default function Home() {
       const body = new FormData();
       body.append('cv', file);
       body.append('jobDescription', jobDescription);
-      const res = await fetch('/api/generate', { method: 'POST', body });
+      const res = await fetch(`${API_BASE}/api/generate`, { method: 'POST', body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed');
       setResult(data);
@@ -39,7 +41,7 @@ export default function Home() {
 
   async function download(type, format) {
     if (!result) return;
-    const res = await fetch(`/api/${format}`, {
+    const res = await fetch(`${API_BASE}/api/${format}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ result, type }),
